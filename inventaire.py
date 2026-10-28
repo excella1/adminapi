@@ -1,6 +1,9 @@
 import os
 import sys
 
+import json
+from datetime import datetime
+
 import requests
 
 DOCKER = os.environ.get("DOCKER_API_URL", "http://127.0.0.1:2375")
@@ -12,6 +15,7 @@ reponse = session.get(DOCKER + "/containers/json?all=true", timeout=5)
 reponse.raise_for_status()
 conteneurs = reponse.json()
 
+inventaire = []
 for c in conteneurs:
 
 
@@ -19,6 +23,15 @@ for c in conteneurs:
     nom = c["Names"][0].lstrip("/")
     image = c["Image"] 
     etat = c["State"]
+
+    infos = {
+        "nom": nom,
+        "image": image,
+        "etat": etat,
+        "cpu": None,
+        "memoire_mo": None
+    }
+
     print (nom, image, etat)
     if etat == "running":
         stats_rep = session.get(
@@ -48,5 +61,10 @@ for c in conteneurs:
         memoire_mo = stats["memory_stats"]["usage"] / 1024 / 1024
         print(f"CPU : {pourcent:.2f}%")
         print(f"RAM : {memoire_mo:.2f} Mo")
+
+        infos["cpu"] = pourcent
+        infos["memoire_mo"] = memoire_mo
     else:
         print("Conteneur arrêté")
+    inventaire.append(infos)
+print(inventaire)
