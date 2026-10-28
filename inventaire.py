@@ -74,9 +74,23 @@ reponse_netbox = session.get(
 )
 reponse_netbox.raise_for_status()
 infos_netbox = reponse_netbox.json()
+url = NETBOX + "/api/core/object-types/?limit=50"
+types_objets = []
+while url:
+    reponse = session.get(
+        url,
+        headers={"Authorization": "Bearer " + JETON},
+        timeout=5
+    )
+    reponse.raise_for_status()
+    page = reponse.json()
+    types_objets.extend(page["results"])
+    total_annonce = page["count"]
+    url = page["next"]
 resultat = {
     "date": datetime.now().isoformat(),
     "netbox_version": infos_netbox["netbox-version"],
+    "netbox_types_objets": len(types_objets),
     "conteneurs": inventaire
 }
 with open("inventaire.json", "w") as f:
@@ -84,4 +98,7 @@ with open("inventaire.json", "w") as f:
 nb_running = sum(1 for c in inventaire if c["etat"] == "running")
 print(f"Nombre total de conteneurs : {len(inventaire)}")
 print(f"version NetBox : {infos_netbox['netbox-version']}")
+print(f"Types d'objets annoncés par NetBox : {total_annonce}")
+print(f"Types d'objets récupérés : {len(types_objets)}")
+
 print(f"Nombre de conteneurs démarrés : {nb_running}")
