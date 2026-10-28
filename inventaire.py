@@ -11,6 +11,12 @@ NETBOX = os.environ.get("NETBOX_URL", "http://127.0.0.1:8080")
 JETON = os.environ["NETBOX_TOKEN"]        # pas de valeur par défaut pour un secret #
 
 session = requests.Session()
+try:
+    reponse = session.get(DOCKER + "/containers/json?all=true", timeout=5)
+    reponse.raise_for_status()
+except requests.exceptions.RequestException as erreur:
+        sys.exit(f"Erreur : impossible de joindre l'API Docker sur {DOCKER}. Vérifiez qu'elle est démarrée. Détail : {erreur}")
+conteneurs = reponse.json()
 reponse = session.get(DOCKER + "/containers/json?all=true", timeout=5)
 reponse.raise_for_status()
 conteneurs = reponse.json()
