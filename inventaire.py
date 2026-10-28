@@ -67,4 +67,21 @@ for c in conteneurs:
     else:
         print("Conteneur arrêté")
     inventaire.append(infos)
-print(inventaire)
+reponse_netbox = session.get(
+    NETBOX + "/api/status/",
+    headers={"Authorization": "Bearer " + JETON},
+    timeout=5
+)
+reponse_netbox.raise_for_status()
+infos_netbox = reponse_netbox.json()
+resultat = {
+    "date": datetime.now().isoformat(),
+    "netbox_version": infos_netbox["netbox-version"],
+    "conteneurs": inventaire
+}
+with open("inventaire.json", "w") as f:
+    json.dump(resultat, f, indent=2)
+nb_running = sum(1 for c in inventaire if c["etat"] == "running")
+print(f"Nombre total de conteneurs : {len(inventaire)}")
+print(f"version NetBox : {infos_netbox['netbox-version']}")
+print(f"Nombre de conteneurs démarrés : {nb_running}")
