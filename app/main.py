@@ -3,20 +3,25 @@ import os
 import requests
 from fastapi import FastAPI
 from fastapi import HTTPException
-
+from pydantic import BaseModel
 app = FastAPI()
-
+class Conteneur(BaseModel):
+    id: str
+    name: str
+    image: str
+    state: str
 DOCKER_API_URL = os.environ.get(
     "DOCKER_API_URL",
     "http://127.0.0.1:2375"
 )
-
-
 @app.get("/health", summary="Vérifie que l'API répond")
 def sante():
     return {"status": "ok"}
-
-@app.get("/containers", summary="Liste les conteneurs gérés")
+@app.get(
+    "/containers",
+    summary="Liste les conteneurs gérés",
+    response_model=list[Conteneur]
+)
 def lister():
     filtre = {"label": ["adminapi.managed=true"]}
     reponse = requests.get(
@@ -33,11 +38,13 @@ def lister():
             "image": c["Image"],
             "state": c["State"]
         }
-    
         resultat.append(infos)
     return resultat
-
-@app.get("/containers/{identifiant}", summary="Détail d'un conteneur géré")
+@app.get(
+    "/containers/{identifiant}",
+    summary="Détail d'un conteneur géré",
+    response_model=Conteneur
+)
 def lire(identifiant: str):
     reponse = requests.get(
         DOCKER_API_URL + f"/containers/{identifiant}/json",
