@@ -12,12 +12,12 @@ DOCKER_API_URL = os.environ.get(
 )
 
 
-@app.get("/health")
-def health():
+@app.get("/health", summary="Vérifie que l'API répond")
+def sante():
     return {"status": "ok"}
 
-@app.get("/containers")
-def containers():
+@app.get("/containers", summary="Liste les conteneurs gérés")
+def lister():
     filtre = {"label": ["adminapi.managed=true"]}
     reponse = requests.get(
         DOCKER_API_URL + "/containers/json",
@@ -37,7 +37,7 @@ def containers():
         resultat.append(infos)
     return resultat
 
-@app.get("/containers/{identifiant}")
+@app.get("/containers/{identifiant}", summary="Détail d'un conteneur géré")
 def lire(identifiant: str):
     reponse = requests.get(
         DOCKER_API_URL + f"/containers/{identifiant}/json",
