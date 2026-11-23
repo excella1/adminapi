@@ -20,6 +20,16 @@ from app.securite import exiger_token, exiger_admin
 
 
 
+# Il n'existe pas de transaction entre Docker et NetBox.
+
+# Si Docker réussit mais que NetBox échoue, raise_for_status() remonte l'erreur.
+
+# L'incohérence reste visible afin de pouvoir être détectée et corrigée manuellement.
+
+from app.netbox_client import creer_vm, changer_statut, supprimer_vm
+
+
+
 app = FastAPI()
 
 
@@ -114,6 +124,8 @@ def lister():
 
     )
 
+
+
     reponse.raise_for_status()
 
 
@@ -178,9 +190,9 @@ def lire(identifiant: str):
 
     reponse.raise_for_status()
 
+
+
     detail = reponse.json()
-
-
 
     labels = detail["Config"]["Labels"]
 
@@ -272,6 +284,8 @@ def creer(demande: ConteneurACreer):
 
     reponse.raise_for_status()
 
+
+
     identifiant = reponse.json()["Id"]
 
 
@@ -284,7 +298,13 @@ def creer(demande: ConteneurACreer):
 
     )
 
+
+
     reponse.raise_for_status()
+
+
+
+    creer_vm(demande.name)
 
 
 
@@ -350,6 +370,12 @@ def arreter(identifiant: str):
 
     reponse.raise_for_status()
 
+
+
+    changer_statut(actuel["name"], "offline")
+
+
+
     return lire(identifiant)
 
 
@@ -410,6 +436,12 @@ def demarrer(identifiant: str):
 
     reponse.raise_for_status()
 
+
+
+    changer_statut(actuel["name"], "active")
+
+
+
     return lire(identifiant)
 
 
@@ -430,7 +462,7 @@ def demarrer(identifiant: str):
 
 def supprimer(identifiant: str):
 
-    lire(identifiant)
+    actuel = lire(identifiant)
 
 
 
@@ -447,5 +479,11 @@ def supprimer(identifiant: str):
 
 
     reponse.raise_for_status()
+
+
+
+    supprimer_vm(actuel["name"])
+
+
 
     return Response(status_code=204)
