@@ -1,39 +1,16 @@
 import json
-
 import os
-
 import requests
-
-
-
 from typing import Literal
-
-
-
-from fastapi import Depends, FastAPI, HTTPException, Response
-
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, Field
-
-
-
 from app.securite import exiger_token, exiger_admin
-
-
-
 # Il n'existe pas de transaction entre Docker et NetBox.
-
 # Si Docker réussit mais que NetBox échoue, raise_for_status() remonte l'erreur.
-
 # L'incohérence reste visible afin de pouvoir être détectée et corrigée manuellement.
-
 from app.netbox_client import creer_vm, changer_statut, supprimer_vm
 
-
-
 app = FastAPI()
-
-
-
 
 
 class Conteneur(BaseModel):
@@ -45,9 +22,6 @@ class Conteneur(BaseModel):
     image: str
 
     state: str
-
-
-
 
 
 class ConteneurACreer(BaseModel):
@@ -65,7 +39,11 @@ class ConteneurACreer(BaseModel):
     ]
 
 
+class Alerte(BaseModel):
 
+    alert: Literal["container_down"]
+
+    container: str = Field(pattern=r"^[a-z][a-z0-9-]{1,30}$")
 
 
 DOCKER_API_URL = os.environ.get(
@@ -76,19 +54,13 @@ DOCKER_API_URL = os.environ.get(
 
 )
 
-
-
-
+SECRET_WEBHOOK = os.environ["WEBHOOK_SECRET"]
 
 @app.get("/health", summary="Vérifie que l'API répond")
 
 def sante():
 
     return {"status": "ok"}
-
-
-
-
 
 @app.get(
 
@@ -106,8 +78,6 @@ def lister():
 
     filtre = {"label": ["adminapi.managed=true"]}
 
-
-
     reponse = requests.get(
 
         DOCKER_API_URL + "/containers/json",
@@ -124,11 +94,7 @@ def lister():
 
     )
 
-
-
     reponse.raise_for_status()
-
-
 
     return [
 
@@ -147,10 +113,6 @@ def lister():
         for c in reponse.json()
 
     ]
-
-
-
-
 
 @app.get(
 
@@ -187,16 +149,9 @@ def lire(identifiant: str):
         )
 
 
-
     reponse.raise_for_status()
-
-
-
     detail = reponse.json()
-
     labels = detail["Config"]["Labels"]
-
-
 
     if labels is None or labels.get("adminapi.managed") != "true":
 
@@ -221,9 +176,6 @@ def lire(identifiant: str):
         "state": detail["State"]["Status"]
 
     }
-
-
-
 
 
 @app.post(
@@ -254,8 +206,6 @@ def creer(demande: ConteneurACreer):
 
     }
 
-
-
     reponse = requests.post(
 
         f"{DOCKER_API_URL}/containers/create",
@@ -268,8 +218,6 @@ def creer(demande: ConteneurACreer):
 
     )
 
-
-
     if reponse.status_code == 409:
 
         raise HTTPException(
@@ -280,16 +228,8 @@ def creer(demande: ConteneurACreer):
 
         )
 
-
-
     reponse.raise_for_status()
-
-
-
     identifiant = reponse.json()["Id"]
-
-
-
     reponse = requests.post(
 
         f"{DOCKER_API_URL}/containers/{identifiant}/start",
@@ -298,20 +238,11 @@ def creer(demande: ConteneurACreer):
 
     )
 
-
-
     reponse.raise_for_status()
-
-
 
     creer_vm(demande.name)
 
-
-
     return lire(identifiant)
-
-
-
 
 
 @app.post(
@@ -330,8 +261,6 @@ def arreter(identifiant: str):
 
     actuel = lire(identifiant)
 
-
-
     if actuel["state"] == "exited":
 
         raise HTTPException(
@@ -341,8 +270,6 @@ def arreter(identifiant: str):
             detail="Conteneur déjà arrêté"
 
         )
-
-
 
     reponse = requests.post(
 
@@ -354,8 +281,6 @@ def arreter(identifiant: str):
 
     )
 
-
-
     if reponse.status_code == 304:
 
         raise HTTPException(
@@ -366,21 +291,11 @@ def arreter(identifiant: str):
 
         )
 
-
-
     reponse.raise_for_status()
-
-
 
     changer_statut(actuel["name"], "offline")
 
-
-
     return lire(identifiant)
-
-
-
-
 
 @app.post(
 
@@ -398,8 +313,6 @@ def demarrer(identifiant: str):
 
     actuel = lire(identifiant)
 
-
-
     if actuel["state"] == "running":
 
         raise HTTPException(
@@ -410,8 +323,6 @@ def demarrer(identifiant: str):
 
         )
 
-
-
     reponse = requests.post(
 
         f"{DOCKER_API_URL}/containers/{identifiant}/start",
@@ -419,8 +330,6 @@ def demarrer(identifiant: str):
         timeout=30
 
     )
-
-
 
     if reponse.status_code == 304:
 
@@ -432,21 +341,11 @@ def demarrer(identifiant: str):
 
         )
 
-
-
     reponse.raise_for_status()
-
-
 
     changer_statut(actuel["name"], "active")
 
-
-
     return lire(identifiant)
-
-
-
-
 
 @app.delete(
 
@@ -463,9 +362,6 @@ def demarrer(identifiant: str):
 def supprimer(identifiant: str):
 
     actuel = lire(identifiant)
-
-
-
     reponse = requests.delete(
 
         f"{DOCKER_API_URL}/containers/{identifiant}",
@@ -476,14 +372,54 @@ def supprimer(identifiant: str):
 
     )
 
-
-
     reponse.raise_for_status()
-
-
 
     supprimer_vm(actuel["name"])
 
-
-
     return Response(status_code=204)
+
+@app.post(
+
+    "/webhooks/alerts",
+
+    summary="Reçoit une alerte et redémarre le conteneur visé",
+
+    status_code=202
+
+)
+
+def recevoir_alerte(
+
+    alerte: Alerte,
+
+    x_webhook_secret: str | None = Header(default=None)
+
+):
+
+    if x_webhook_secret != SECRET_WEBHOOK:
+
+        raise HTTPException(
+
+            status_code=401,
+
+            detail="Secret de webhook absent ou faux"
+
+        )
+
+    actuel = lire(alerte.container)
+
+    if actuel["state"] != "running":
+
+        reponse = requests.post(
+
+            f"{DOCKER_API_URL}/containers/{actuel['id']}/start",
+
+            timeout=30
+
+        )
+
+        reponse.raise_for_status()
+
+        changer_statut(actuel["name"], "active")
+
+    return lire(alerte.container)
