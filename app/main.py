@@ -4,11 +4,7 @@ import os
 
 import requests
 
-
-
 from typing import Literal
-
-
 
 from fastapi import FastAPI
 
@@ -22,8 +18,6 @@ app = FastAPI()
 
 
 
-
-
 class Conteneur(BaseModel):
 
     id: str
@@ -33,8 +27,6 @@ class Conteneur(BaseModel):
     image: str
 
     state: str
-
-
 
 
 
@@ -54,8 +46,6 @@ class ConteneurACreer(BaseModel):
 
 
 
-
-
 DOCKER_API_URL = os.environ.get(
 
     "DOCKER_API_URL",
@@ -64,19 +54,11 @@ DOCKER_API_URL = os.environ.get(
 
 )
 
-
-
-
-
 @app.get("/health", summary="Vérifie que l'API répond")
 
 def sante():
 
     return {"status": "ok"}
-
-
-
-
 
 @app.get(
 
@@ -115,9 +97,7 @@ def lister():
     reponse.raise_for_status()
 
 
-
     resultat = []
-
 
 
     for c in reponse.json():
@@ -137,10 +117,6 @@ def lister():
 
 
     return resultat
-
-
-
-
 
 @app.get(
 
@@ -178,14 +154,9 @@ def lire(identifiant: str):
 
     reponse.raise_for_status()
 
-
-
     detail = reponse.json()
 
-
-
     labels = detail["Config"]["Labels"]
-
 
 
     if labels is None or labels.get("adminapi.managed") != "true":
@@ -211,10 +182,6 @@ def lire(identifiant: str):
         "state": detail["State"]["Status"]
 
     }
-
-
-
-
 
 @app.post(
 
@@ -272,11 +239,7 @@ def creer(demande: ConteneurACreer):
 
     reponse.raise_for_status()
 
-
-
     identifiant = reponse.json()["Id"]
-
-
 
     reponse = requests.post(
 
@@ -293,10 +256,6 @@ def creer(demande: ConteneurACreer):
 
 
     return lire(identifiant)
-
-
-
-
 
 @app.post(
 
@@ -356,10 +315,6 @@ def arreter(identifiant: str):
 
     return lire(identifiant)
 
-
-
-
-
 @app.post(
 
     "/containers/{identifiant}/start",
@@ -415,10 +370,6 @@ def demarrer(identifiant: str):
 
 
     return lire(identifiant)
-
-
-
-
 
 @app.delete(
 
