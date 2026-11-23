@@ -4,13 +4,15 @@ import os
 
 import requests
 
+
+
 from typing import Literal
 
 
 
 from fastapi import FastAPI
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 
 from pydantic import BaseModel, Field
 
@@ -413,3 +415,41 @@ def demarrer(identifiant: str):
 
 
     return lire(identifiant)
+
+
+
+
+
+@app.delete(
+
+    "/containers/{identifiant}",
+
+    summary="Supprime un conteneur",
+
+    status_code=204
+
+)
+
+def supprimer(identifiant: str):
+
+    lire(identifiant)
+
+
+
+    reponse = requests.delete(
+
+        f"{DOCKER_API_URL}/containers/{identifiant}",
+
+        params={"force": "true"},
+
+        timeout=30
+
+    )
+
+
+
+    reponse.raise_for_status()
+
+
+
+    return Response(status_code=204)
