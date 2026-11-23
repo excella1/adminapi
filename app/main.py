@@ -4,17 +4,25 @@ import os
 
 import requests
 
+
+
 from typing import Literal
 
-from fastapi import FastAPI
 
-from fastapi import HTTPException, Response
+
+from fastapi import Depends, FastAPI, HTTPException, Response
 
 from pydantic import BaseModel, Field
 
 
 
+from app.securite import exiger_token, exiger_admin
+
+
+
 app = FastAPI()
+
+
 
 
 
@@ -27,6 +35,8 @@ class Conteneur(BaseModel):
     image: str
 
     state: str
+
+
 
 
 
@@ -46,6 +56,8 @@ class ConteneurACreer(BaseModel):
 
 
 
+
+
 DOCKER_API_URL = os.environ.get(
 
     "DOCKER_API_URL",
@@ -54,11 +66,19 @@ DOCKER_API_URL = os.environ.get(
 
 )
 
+
+
+
+
 @app.get("/health", summary="Vérifie que l'API répond")
 
 def sante():
 
     return {"status": "ok"}
+
+
+
+
 
 @app.get(
 
@@ -66,7 +86,9 @@ def sante():
 
     summary="Liste les conteneurs gérés",
 
-    response_model=list[Conteneur]
+    response_model=list[Conteneur],
+
+    dependencies=[Depends(exiger_token)]
 
 )
 
@@ -92,17 +114,13 @@ def lister():
 
     )
 
-
-
     reponse.raise_for_status()
 
 
-    resultat = []
 
+    return [
 
-    for c in reponse.json():
-
-        resultat.append({
+        {
 
             "id": c["Id"],
 
@@ -112,11 +130,15 @@ def lister():
 
             "state": c["State"]
 
-        })
+        }
+
+        for c in reponse.json()
+
+    ]
 
 
 
-    return resultat
+
 
 @app.get(
 
@@ -124,7 +146,9 @@ def lister():
 
     summary="Détail d'un conteneur géré",
 
-    response_model=Conteneur
+    response_model=Conteneur,
+
+    dependencies=[Depends(exiger_token)]
 
 )
 
@@ -132,7 +156,7 @@ def lire(identifiant: str):
 
     reponse = requests.get(
 
-        DOCKER_API_URL + f"/containers/{identifiant}/json",
+        f"{DOCKER_API_URL}/containers/{identifiant}/json",
 
         timeout=5
 
@@ -156,7 +180,10 @@ def lire(identifiant: str):
 
     detail = reponse.json()
 
+
+
     labels = detail["Config"]["Labels"]
+
 
 
     if labels is None or labels.get("adminapi.managed") != "true":
@@ -183,6 +210,10 @@ def lire(identifiant: str):
 
     }
 
+
+
+
+
 @app.post(
 
     "/containers",
@@ -191,7 +222,9 @@ def lire(identifiant: str):
 
     status_code=201,
 
-    response_model=Conteneur
+    response_model=Conteneur,
+
+    dependencies=[Depends(exiger_admin)]
 
 )
 
@@ -241,6 +274,8 @@ def creer(demande: ConteneurACreer):
 
     identifiant = reponse.json()["Id"]
 
+
+
     reponse = requests.post(
 
         f"{DOCKER_API_URL}/containers/{identifiant}/start",
@@ -249,13 +284,15 @@ def creer(demande: ConteneurACreer):
 
     )
 
-
-
     reponse.raise_for_status()
 
 
 
     return lire(identifiant)
+
+
+
+
 
 @app.post(
 
@@ -263,7 +300,9 @@ def creer(demande: ConteneurACreer):
 
     summary="Arrête un conteneur géré",
 
-    response_model=Conteneur
+    response_model=Conteneur,
+
+    dependencies=[Depends(exiger_admin)]
 
 )
 
@@ -311,9 +350,11 @@ def arreter(identifiant: str):
 
     reponse.raise_for_status()
 
-
-
     return lire(identifiant)
+
+
+
+
 
 @app.post(
 
@@ -321,7 +362,9 @@ def arreter(identifiant: str):
 
     summary="Démarre un conteneur géré",
 
-    response_model=Conteneur
+    response_model=Conteneur,
+
+    dependencies=[Depends(exiger_admin)]
 
 )
 
@@ -367,9 +410,11 @@ def demarrer(identifiant: str):
 
     reponse.raise_for_status()
 
-
-
     return lire(identifiant)
+
+
+
+
 
 @app.delete(
 
@@ -377,7 +422,9 @@ def demarrer(identifiant: str):
 
     summary="Supprime un conteneur",
 
-    status_code=204
+    status_code=204,
+
+    dependencies=[Depends(exiger_admin)]
 
 )
 
@@ -400,7 +447,5 @@ def supprimer(identifiant: str):
 
 
     reponse.raise_for_status()
-
-
 
     return Response(status_code=204)
