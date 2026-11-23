@@ -43,14 +43,12 @@ def lister():
     reponse.raise_for_status()
     resultat = []
     for c in reponse.json():
-        resultat.append(
-            {
-                "id": c["Id"],
-                "name": c["Names"][0].lstrip("/"),
-                "image": c["Image"],
-                "state": c["State"]
-            }
-        )
+        resultat.append({
+            "id": c["Id"],
+            "name": c["Names"][0].lstrip("/"),
+            "image": c["Image"],
+            "state": c["State"]
+        })
     return resultat
 @app.get(
     "/containers/{identifiant}",
@@ -63,7 +61,7 @@ def lire(identifiant: str):
         timeout=5
     )
     if reponse.status_code == 404:
-        raise HTTPException(
+       raise HTTPException(
             status_code=404,
             detail="Conteneur inconnu"
         )
@@ -111,5 +109,29 @@ def creer(demande: ConteneurACreer):
         f"{DOCKER_API_URL}/containers/{identifiant}/start",
         timeout=10
     )
+    reponse.raise_for_status()
+    return lire(identifiant)
+@app.post(
+    "/containers/{identifiant}/stop",
+    summary="Arrête un conteneur géré",
+    response_model=Conteneur
+)
+def arreter(identifiant: str):
+    actuel = lire(identifiant)
+    if actuel["state"] == "exited":
+        raise HTTPException(
+            status_code=409,
+            detail="Conteneur déjà arrêté"
+        )
+    reponse = requests.post(
+        f"{DOCKER_API_URL}/containers/{identifiant}/stop",
+        params={"t": 2},
+        timeout=30
+    )
+    if reponse.status_code == 304:
+        raise HTTPException(
+            status_code=409,
+            detail="Conteneur déjà arrêté"
+        )
     reponse.raise_for_status()
     return lire(identifiant)
